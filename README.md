@@ -12,7 +12,7 @@ It is based on Shopify Engineering's [*"Back to native"*](https://shopify.engine
 - a command-line tool that can inspect the app, move between screens and perform actions without touching the UI,
 - a **remote mode** that drives the running app on a simulator with the same commands.
 
-> Status: M0–M2 done (headless core + CLI). Next: M3, the Expo app.
+> Status: M0–M3 done (headless core, CLI, Expo app). Next: M4, remote mode.
 
 ## Quick start
 
@@ -25,6 +25,9 @@ npx todo run todo.create '{"title":"Buy milk"}' # state lives in .todo/state.jso
 npx todo inspect                                # current screen as JSON
 npx todo --as agent:claude run todo.delete '{"id":"t_…"}'   # blocked until a human approves (--yes)
 npx todo run-script scenarios/*.jsonl           # replay flows headlessly (~10ms each)
+
+npm run ios                                     # the Expo app in the iOS simulator (Expo Go)
+npm run e2e:ios                                 # Maestro UI smoke flows against it
 ```
 
 Run `npm install` before using `npx todo`. If the workspace bin isn't linked yet,
@@ -134,7 +137,7 @@ rn-arch-agent/
 | M0 Skeleton (0.5d) | Monorepo, lint rule banning RN imports in core, `AGENTS.md` | `npm run lint && npm run typecheck` ✅ |
 | M1 Headless core (1.5d) | Domain, store, actions + middleware, nav, view models | `npm run test:core` ✅ (60 tests, ~0.4s) |
 | M2 CLI local (1d) | `inspect`, `run`, `run-script`, scenarios in CI | `todo run-script scenarios/happy-path.jsonl` ✅ |
-| M3 Mobile shell (2d) | Renderers, NavSync, expo-sqlite, Activity screen | Taps show up as `origin: user` |
+| M3 Mobile shell (2d) | Renderers, NavSync, expo-sqlite, Activity screen | Taps show up as `origin: user` ✅ |
 | M4 Remote mode (1.5d) | Bridge, `--remote`, screenshots | The same scenario passes on the simulator and the UI updates live |
 | M5 MCP (1.5d) | Registry-generated tools, confirmation policy | Headline demo (below) |
 | M6 Stretch (2d) | In-app assistant using the Claude API and registry tools | The headline demo, entirely inside the app |

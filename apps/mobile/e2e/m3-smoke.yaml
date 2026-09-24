@@ -1,0 +1,43 @@
+# M3 smoke test: a human uses the app; every tap goes through core actions.
+# Needs the app open in Expo Go on a simulator (npm run ios -w @todo/mobile), then:
+#   maestro test apps/mobile/e2e/m3-smoke.yaml
+# Creates its own uniquely named list, so it doesn't depend on existing data.
+appId: host.exp.Exponent
+---
+- evalScript: ${output.list = 'Smoke ' + Date.now()}
+- assertVisible: "Lists"
+- tapOn:
+    id: "new-list"
+- inputText: ${output.list}
+- pressKey: Enter
+- hideKeyboard
+# Pressable rows are one accessibility element ("<name>, 0 open, ›"), so match by prefix.
+- tapOn:
+    text: ${output.list + '.*'}
+- tapOn:
+    id: "new-todo"
+- inputText: "Buy milk"
+- pressKey: Enter
+- inputText: "Call mom"
+- pressKey: Enter
+- hideKeyboard
+- tapOn:
+    id: "check-Buy milk"
+- assertVisible: "1 open · 1 done"
+# Native swipe-back must sync into core as nav.back
+- swipe:
+    start: "20%, 70%"
+    end: "95%, 70%"
+    duration: 800
+- waitForAnimationToEnd
+- assertVisible: ${output.list + '.*1 open · 1 done.*'}
+- tapOn:
+    id: "open-activity"
+- assertVisible: "You completed \"Buy milk\""
+- assertVisible: "You added \"Call mom\""
+- tapOn:
+    text: "Undo"
+    index: 0
+- assertVisible: ".*undone.*"
+- tapOn: "Lists"
+- assertVisible: ${output.list + '.*2 open.*'}

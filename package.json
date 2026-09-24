@@ -10,14 +10,17 @@
     "todo": "tsx apps/cli/src/main.ts",
     "test": "vitest run",
     "test:core": "vitest run --project core",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && npm run typecheck -w @todo/mobile",
     "lint": "eslint .",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "check": "npm run lint && npm run typecheck && npm test",
+    "ios": "npm run ios -w @todo/mobile",
+    "e2e:ios": "maestro test apps/mobile/e2e"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
     "@types/node": "^24.0.0",
     "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "tsx": "^4.23.15",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.70.1",

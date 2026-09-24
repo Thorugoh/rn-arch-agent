@@ -24,6 +24,7 @@ Platform code goes behind a port in `packages/core/src/ports.ts`, with adapters 
 | `packages/core/src/scenario.ts` | JSONL scenario runner, shared by tests, the CLI and remote mode |
 | `packages/adapters-node/` | JSON file storage, system clock, random IDs |
 | `apps/cli/` | The `todo` CLI |
+| `apps/mobile/` | Expo app: a thin renderer over core. See `apps/mobile/AGENTS.md` for Expo and navigation rules |
 | `scenarios/*.jsonl` | Executable flows, run in CI |
 
 ## Commands
