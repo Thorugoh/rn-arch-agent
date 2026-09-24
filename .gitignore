@@ -1,0 +1,6 @@
+node_modules/
+.todo/
+.expo/
+dist/
+*.log
+.DS_Store
