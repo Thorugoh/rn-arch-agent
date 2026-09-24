@@ -15,12 +15,27 @@ export type DispatchMeta = {
   confirmed?: boolean;
   /** Retries with the same key return the first result instead of running again. */
   idempotencyKey?: string;
+  /**
+   * false = nobody can answer a prompt right now (scripts, CI): return `confirmation_required`
+   * instead of asking through the Confirmer port. Defaults to true.
+   */
+  interactive?: boolean;
 };
 
 export type ActionFailure = { code: ErrorCode; message: string; details?: unknown };
 export type DispatchResult<T = unknown> =
   | { ok: true; value: T; entryId?: string }
   | { ok: false; error: ActionFailure };
+
+/** Emitted after every dispatch (UI taps, CLI, agents), e.g. for the remote bridge's event stream. */
+export type DispatchEvent = {
+  name: string;
+  input: unknown;
+  meta: DispatchMeta;
+  result: DispatchResult;
+  /** The journal summary, for writes that succeeded. */
+  summary?: string;
+};
 
 export type PolicyDecision = { allow: true; confirm?: boolean } | { allow: false; reason: string };
 export type Policy = (x: { action: AnyAction; origin: Origin; input: unknown }) => PolicyDecision;
@@ -98,6 +113,7 @@ export async function createApp(opts: CreateAppOptions) {
   if (stored == null) saving = saving.then(() => ports.storage.save(initial));
 
   const idempotency = new Map<string, DispatchResult>();
+  const dispatchListeners = new Set<(e: DispatchEvent) => void>();
 
   function fail(code: ErrorCode, message: string, details?: unknown): DispatchResult<never> {
     return { ok: false, error: details === undefined ? { code, message } : { code, message, details } };
@@ -132,6 +148,16 @@ export async function createApp(opts: CreateAppOptions) {
   }
 
   async function dispatch<T = unknown>(name: string, rawInput: unknown, meta: DispatchMeta): Promise<DispatchResult<T>> {
+    const result = await run<T>(name, rawInput, meta);
+    if (dispatchListeners.size) {
+      const entry = result.ok && result.entryId ? store.getState().journal.find((e) => e.id === result.entryId) : undefined;
+      const event: DispatchEvent = { name, input: rawInput, meta, result, summary: entry?.summary };
+      dispatchListeners.forEach((l) => l(event));
+    }
+    return result;
+  }
+
+  async function run<T>(name: string, rawInput: unknown, meta: DispatchMeta): Promise<DispatchResult<T>> {
     const action = byName.get(name);
     if (!action) return unknownAction(name);
 
@@ -150,7 +176,7 @@ export async function createApp(opts: CreateAppOptions) {
     if (!decision.allow) return fail('forbidden', decision.reason);
     if (decision.confirm && !meta.confirmed) {
       const summary = action.confirmText?.(parsed.data, store.getState()) ?? previewSummary(action, parsed.data);
-      if (!ports.confirm) {
+      if (!ports.confirm || meta.interactive === false) {
         return fail(
           'confirmation_required',
           `${action.name} is destructive and needs the user's approval ("${summary}"). Ask the user, then retry with their confirmation.`,
@@ -204,6 +230,10 @@ export async function createApp(opts: CreateAppOptions) {
     action: (name: string) => byName.get(name),
     /** Resolves once every change so far is persisted. */
     flush: () => saving,
+    onDispatch: (listener: (e: DispatchEvent) => void) => {
+      dispatchListeners.add(listener);
+      return () => void dispatchListeners.delete(listener);
+    },
   };
 }
 

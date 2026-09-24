@@ -19,12 +19,13 @@ export default defineConfig(
   },
   {
     // Headless-first guardrail: core must run in plain Node *and* in React Native.
-    files: ['packages/core/src/**/*.ts'],
+    files: ['packages/core/src/**/*.ts', 'packages/bridge/src/**/*.ts'],
+    ignores: ['packages/bridge/src/server.ts'],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [{
           group: ['react', 'react-*', 'react-native', 'react-native-*', 'expo', 'expo-*', '@expo/*', 'node:*', 'fs', 'path', 'os', 'crypto'],
-          message: 'packages/core must stay headless and platform-free. Put platform code behind a port (src/ports.ts).',
+          message: 'core and the app-side bridge must stay platform-free (they run in Node and React Native). Put platform code behind a port.',
         }],
       }],
     },

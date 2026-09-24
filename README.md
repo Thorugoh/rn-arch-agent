@@ -12,7 +12,7 @@ It is based on Shopify Engineering's [*"Back to native"*](https://shopify.engine
 - a command-line tool that can inspect the app, move between screens and perform actions without touching the UI,
 - a **remote mode** that drives the running app on a simulator with the same commands.
 
-> Status: M0–M3 done (headless core, CLI, Expo app). Next: M4, remote mode.
+> Status: M0–M4 done (headless core, CLI, Expo app, remote mode). Next: M5, MCP for user agents.
 
 ## Quick start
 
@@ -28,6 +28,12 @@ npx todo run-script scenarios/*.jsonl           # replay flows headlessly (~10ms
 
 npm run ios                                     # the Expo app in the iOS simulator (Expo Go)
 npm run e2e:ios                                 # Maestro UI smoke flows against it
+
+npx todo serve                                  # relay: lets the CLI/agents drive the live app
+npx todo --remote inspect                       # the simulator's current screen as JSON
+npx todo --remote --as agent:claude run todo.delete '{"id":"t_…"}'   # the phone asks the user
+npx todo watch                                  # live feed of every action in the app
+npx todo screenshot shot.png
 ```
 
 Run `npm install` before using `npx todo`. If the workspace bin isn't linked yet,
@@ -93,10 +99,10 @@ todo --fixture demo inspect                   # in memory from a fixture, nothin
 todo run-script scenarios/happy-path.jsonl    # replay and assert a whole flow
 ```
 
-**2. Remote (CLI → running app).** The app starts a JSON-RPC-over-WebSocket bridge, in development builds only. The CLI runs the same commands against the app on a simulator or device, and the UI updates live.
+**2. Remote (CLI → running app).** In development builds the app dials out to a relay (`todo serve`) over JSON-RPC/WebSocket. The CLI runs the same commands against the app on a simulator or device, and the UI updates live.
 
 ```bash
-todo --remote ios-sim run-script scenarios/happy-path.jsonl
+todo --remote run-script scenarios/happy-path.jsonl
 ```
 
 Bridge methods: `actions.list`, `actions.invoke`, `app.inspect`, `state.get` / `state.load`, `events.subscribe`, `dev.screenshot`.
@@ -118,7 +124,7 @@ rn-arch-agent/
 │  ├─ core/                   # domain, store, nav, screens, actions, ports (no RN imports, enforced by lint)
 │  ├─ adapters-node/
 │  ├─ adapters-rn/
-│  └─ bridge/                 # JSON-RPC types, WS relay (node) + client (app)
+│  └─ bridge/                 # JSON-RPC protocol, app host + client (platform-free), relay (node)
 ├─ apps/
 │  ├─ mobile/                 # Expo app: renderers, NavSync, DevBridge, ConfirmSheet
 │  ├─ cli/                    # `todo` binary, local + remote
@@ -138,7 +144,7 @@ rn-arch-agent/
 | M1 Headless core (1.5d) | Domain, store, actions + middleware, nav, view models | `npm run test:core` ✅ (60 tests, ~0.4s) |
 | M2 CLI local (1d) | `inspect`, `run`, `run-script`, scenarios in CI | `todo run-script scenarios/happy-path.jsonl` ✅ |
 | M3 Mobile shell (2d) | Renderers, NavSync, expo-sqlite, Activity screen | Taps show up as `origin: user` ✅ |
-| M4 Remote mode (1.5d) | Bridge, `--remote`, screenshots | The same scenario passes on the simulator and the UI updates live |
+| M4 Remote mode (1.5d) | Bridge, `--remote`, screenshots | The same scenario passes on the simulator and the UI updates live ✅ |
 | M5 MCP (1.5d) | Registry-generated tools, confirmation policy | Headline demo (below) |
 | M6 Stretch (2d) | In-app assistant using the Claude API and registry tools | The headline demo, entirely inside the app |
 

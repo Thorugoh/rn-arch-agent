@@ -81,9 +81,9 @@ Each milestone ends with a demo command that anyone (human or agent) can run.
 
 ### M4: Remote mode (1.5 days)
 - `packages/bridge`: JSON-RPC types, relay server (`todo serve`) and app client (dev only, pairing token).
-- The CLI's `--remote <target>` sends the same commands to the running app. `events.subscribe` streams changes.
+- The CLI's `--remote` (plus `--device <name>` when several apps are connected) sends the same commands to the running app. `events.subscribe` streams changes.
 - `dev.screenshot` via `react-native-view-shot`.
-- ✅ `todo --remote ios-sim run-script scenarios/happy-path.jsonl` runs **the same scenario** on the simulator. The UI updates live and a screenshot is saved.
+- ✅ `todo --remote run-script scenarios/happy-path.jsonl` runs **the same scenario** on the simulator. The UI updates live and a screenshot is saved.
 
 ### M5: User agents via MCP (1.5 days)
 - `apps/mcp`: tools generated from the registry. Two modes: `--local` (shared JSON file) and `--remote` (bridge to the phone).

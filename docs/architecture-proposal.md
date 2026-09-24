@@ -221,19 +221,28 @@ works from simulators, emulators and devices on the LAN.
 
 Protocol: JSON-RPC 2.0.
 
-| Method | Purpose |
-|---|---|
-| `actions.list` | Registry metadata and JSON schemas |
-| `actions.invoke` | `{ name, input, origin }` → result or structured error |
-| `app.inspect` | Current route and view model |
-| `state.get` / `state.load` | Dump or restore a full snapshot (fixtures) |
-| `events.subscribe` | Stream `state.changed`, `action.executed`, `nav.changed` |
-| `dev.screenshot` | Optional: captured via `react-native-view-shot` for visual review |
+| Method | Served by | Purpose |
+|---|---|---|
+| `actions.list` | app | Registry metadata and JSON schemas |
+| `actions.invoke` | app | `{ name, input, meta: { origin, confirmed?, interactive? } }` → `DispatchResult` |
+| `app.inspect` | app | Current route, available actions and view model |
+| `dev.screenshot` | app | Base64 PNG via `react-native-view-shot` |
+| `relay.devices` | relay | Connected apps |
+| `events.subscribe` | relay | Stream `dispatch` (every action, including taps), `nav` and `device` events |
+
+State dumps and fixtures don't need extra methods: they are ordinary actions (`state.get`, `state.load`).
 
 ```bash
-$ todo --remote ios-sim run todo.create '{"listId":"inbox","title":"From agent"}'
+$ todo serve                                   # terminal 1: the relay
+$ todo --remote --as agent:claude run todo.create '{"title":"From agent"}'
 # the row appears in the simulator immediately; no taps, no accessibility tree
+$ todo --remote --as agent:claude run todo.delete '{"id":"t_…"}'
+# the phone shows "Claude wants to: Delete …?" and the CLI waits for Approve / Decline
+$ todo watch                                   # live feed of everything that happens in the app
 ```
+
+Scenarios always dispatch with `interactive: false`, so they never block on a confirmation
+sheet and behave identically headless and against a live app.
 
 Because remote mode runs the **same actions**, anything proven headlessly can
 be checked on a real device with the same command.
@@ -313,7 +322,7 @@ For each feature, an agent works in checkpoints. A checkpoint moves on only when
 
 1. **Plan:** the feature is split into small ordered slices, each named by the actions and screens it touches.
 2. **Headless proof:** actions, view models and scenarios are written first, and `npm run test:core` is green.
-3. **UI:** the renderer is wired to the view model, and `todo --remote ios-sim run-script` passes.
+3. **UI:** the renderer is wired to the view model, and `todo --remote run-script` passes.
 4. **Visual check:** screenshots are attached to the PR.
 5. **Review:** at least one adversarial agent reviewer (and, optionally, a second model), then a human's approval.
 6. **Memory:** review feedback is added to `AGENTS.md` so the next loop is more autonomous.

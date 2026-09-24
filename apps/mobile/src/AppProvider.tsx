@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { createApp, viewModelFor, type App, type AppState, type Confirmer, type Route } from '@todo/core';
+import { DevBridgeBadge, useDevBridge } from './devBridge';
 import { randomIds, sqliteStorage, systemClock } from './ports';
 
 const AppContext = createContext<App | null>(null);
@@ -8,6 +9,7 @@ const AppContext = createContext<App | null>(null);
 export function AppProvider({ confirm, children, fallback }: { confirm: Confirmer; children: ReactNode; fallback: ReactNode }) {
   const [app, setApp] = useState<App | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const bridgeStatus = useDevBridge(app);
 
   useEffect(() => {
     createApp({ ports: { storage: sqliteStorage(), clock: systemClock(), ids: randomIds(), confirm } }).then(setApp, setError);
@@ -17,7 +19,12 @@ export function AppProvider({ confirm, children, fallback }: { confirm: Confirme
 
   if (error) throw error;
   if (!app) return fallback;
-  return <AppContext.Provider value={app}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={app}>
+      {children}
+      <DevBridgeBadge status={bridgeStatus} />
+    </AppContext.Provider>
+  );
 }
 
 export function useApp(): App {

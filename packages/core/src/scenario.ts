@@ -101,7 +101,8 @@ export async function runScenario(
     };
 
     if ('run' in step) {
-      const res = await dispatch(step.run, input, { origin: step.as ?? origin, confirmed: step.yes });
+      // Scenarios never block on a human, so they behave the same headless and against a live app.
+      const res = await dispatch(step.run, input, { origin: step.as ?? origin, confirmed: step.yes, interactive: false });
       if (step.expectError) {
         const ok = !res.ok && res.error.code === step.expectError;
         if (!report(ok, ok ? `${step.run} failed with ${step.expectError} as expected` : `${step.run}: expected error ${step.expectError}, got ${res.ok ? 'success' : res.error.code}`)) break;
@@ -117,7 +118,7 @@ export async function runScenario(
       continue;
     }
 
-    const res = await dispatch(step.expect, input, { origin });
+    const res = await dispatch(step.expect, input, { origin, interactive: false });
     if (!res.ok) {
       report(false, `${step.expect} failed: [${res.error.code}] ${res.error.message}`, res.error);
       break;

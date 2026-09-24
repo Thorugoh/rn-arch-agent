@@ -73,3 +73,19 @@ describe('journal', () => {
     });
   });
 });
+
+describe('onDispatch', () => {
+  it('emits every dispatch, including failures, with the journal summary', async () => {
+    const { app } = await makeApp();
+    const events: Array<{ name: string; ok: boolean; summary?: string; origin: string }> = [];
+    const off = app.onDispatch((e) => events.push({ name: e.name, ok: e.result.ok, summary: e.summary, origin: e.meta.origin }));
+    await app.dispatch('todo.toggle', { id: 't_eggs' }, { origin: 'user' });
+    await app.dispatch('todo.delete', { id: 't_eggs' }, { origin: 'agent:claude' });
+    off();
+    await app.dispatch('todo.toggle', { id: 't_eggs' }, { origin: 'user' });
+    expect(events).toEqual([
+      { name: 'todo.toggle', ok: true, summary: 'completed "Eggs"', origin: 'user' },
+      { name: 'todo.delete', ok: false, summary: undefined, origin: 'agent:claude' },
+    ]);
+  });
+});

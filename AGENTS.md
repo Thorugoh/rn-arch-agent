@@ -23,6 +23,7 @@ Platform code goes behind a port in `packages/core/src/ports.ts`, with adapters 
 | `packages/core/src/nav.ts` | Navigation stack as data |
 | `packages/core/src/scenario.ts` | JSONL scenario runner, shared by tests, the CLI and remote mode |
 | `packages/adapters-node/` | JSON file storage, system clock, random IDs |
+| `packages/bridge/` | Remote mode: JSON-RPC protocol, app host and client (platform-free), relay (`src/server.ts`, Node) |
 | `apps/cli/` | The `todo` CLI |
 | `apps/mobile/` | Expo app: a thin renderer over core. See `apps/mobile/AGENTS.md` for Expo and navigation rules |
 | `scenarios/*.jsonl` | Executable flows, run in CI |
@@ -39,7 +40,14 @@ npx todo run <action> '<json>'        # dispatch; state lives in .todo/state.jso
 npx todo --fixture demo <cmd>         # in memory from a fixture, nothing saved
 npx todo --as agent:<id> run ...      # act as an agent (destructive actions need --yes)
 npx todo run-script scenarios/*.jsonl # replay scenarios (in memory unless --data)
+
+# Remote mode: the live app in the simulator (npm run ios)
+npx todo serve                        # start the relay (keep it running)
+npx todo --remote <any command>       # e.g. inspect, run, run-script; the UI updates live
+npx todo devices | watch | screenshot <file.png>
 ```
+
+Remote `run-script` runs `state.load` like any scenario, which **replaces the app's data**. Avoid it on a simulator that holds data someone cares about.
 
 Add `--json` to get a single `{ ok, value | error }` document. Errors carry a `code`
 (`invalid_input`, `not_found`, `conflict`, `forbidden`, `confirmation_required`, …), and
@@ -80,4 +88,6 @@ Add `--json` to get a single `{ ok, value | error }` document. Errors carry a `c
 - Sorting must be stable, with ties keeping insertion order. Don't tie-break on random IDs.
 - `DispatchMeta.confirmed` and `origin` come from the shell (a CLI flag, the UI, the MCP host), never from an agent's tool input.
 - CLI commands must flush storage before exiting. `main()` already does this for every booted app.
+- Scripts must never wait on a human: scenario steps dispatch with `interactive: false`, so they get `confirmation_required` instead of a sheet on the device.
+- `--remote` is a plain flag. Pick a device with `--device <name>`, because an optional flag value would swallow the next command.
 - Always run `npm install` before `npx todo`. If the workspace bin isn't linked, npx fetches an unrelated public `todo` package.

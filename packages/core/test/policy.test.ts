@@ -28,6 +28,14 @@ describe('agent policy', () => {
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ origin: 'agent:claude', summary: 'Delete "Eggs"?' }));
   });
 
+  it('does not prompt non-interactive callers, even when a confirmer exists', async () => {
+    const confirm = vi.fn(async () => true);
+    const { app } = await makeApp('demo', { ports: { confirm } });
+    const res = await app.dispatch('todo.delete', { id: 't_eggs' }, { origin: 'agent:claude', interactive: false });
+    expect(res).toMatchObject({ ok: false, error: { code: 'confirmation_required' } });
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
   it('respects denial', async () => {
     const { app } = await makeApp('demo', { ports: { confirm: async () => false } });
     const res = await app.dispatch('todo.delete', { id: 't_eggs' }, { origin: 'agent:claude' });
