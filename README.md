@@ -12,7 +12,23 @@ It is based on Shopify Engineering's [*"Back to native"*](https://shopify.engine
 - a command-line tool that can inspect the app, move between screens and perform actions without touching the UI,
 - a **remote mode** that drives the running app on a simulator with the same commands.
 
-> Status: proposal, 2026-09-24. No code yet.
+> Status: M0–M2 done (headless core + CLI). Next: M3, the Expo app.
+
+## Quick start
+
+```bash
+npm install
+npm run check                                   # lint (incl. headless guardrail) + typecheck + tests
+
+npx todo actions                                # the app's whole API
+npx todo run todo.create '{"title":"Buy milk"}' # state lives in .todo/state.json
+npx todo inspect                                # current screen as JSON
+npx todo --as agent:claude run todo.delete '{"id":"t_…"}'   # blocked until a human approves (--yes)
+npx todo run-script scenarios/*.jsonl           # replay flows headlessly (~10ms each)
+```
+
+Run `npm install` before using `npx todo`. If the workspace bin isn't linked yet,
+npx will fetch an unrelated public package with the same name.
 
 ## Docs
 
@@ -68,8 +84,9 @@ export const createTodo = defineAction({
 **1. Headless (CLI in Node).** Iterations take milliseconds and no simulator is involved.
 
 ```bash
-todo --fixture demo run todo.create '{"listId":"inbox","title":"Buy milk"}'
-todo --fixture demo inspect --json            # current route + view model
+todo run todo.create '{"listId":"inbox","title":"Buy milk"}'
+todo --json inspect                           # current route + view model
+todo --fixture demo inspect                   # in memory from a fixture, nothing saved
 todo run-script scenarios/happy-path.jsonl    # replay and assert a whole flow
 ```
 
@@ -110,13 +127,13 @@ rn-arch-agent/
 
 **Features:** lists, and todos you can create, rename, mark done, give a due date, delete and restore. Plus all / open / done filters and an Activity screen with Undo.
 
-**Stack:** pnpm + Turborepo · Expo + Expo Router · `zustand/vanilla` · zod · expo-sqlite · FlashList · commander + `ws` · `@modelcontextprotocol/sdk` · Vitest + RNTL.
+**Stack:** npm workspaces · Expo + Expo Router · `zustand/vanilla` · zod · expo-sqlite · FlashList · commander + `ws` · `@modelcontextprotocol/sdk` · Vitest + RNTL.
 
 | Milestone | Deliverable | Demo |
 |---|---|---|
-| M0 Skeleton (0.5d) | Monorepo, lint rule banning RN imports in core, `AGENTS.md` | `pnpm -r build && pnpm lint` |
-| M1 Headless core (1.5d) | Domain, store, actions + middleware, nav, view models | `pnpm test:core` runs 20+ tests in under 1s |
-| M2 CLI local (1d) | `inspect`, `run`, `run-script`, scenarios in CI | `todo run-script scenarios/happy-path.jsonl` |
+| M0 Skeleton (0.5d) | Monorepo, lint rule banning RN imports in core, `AGENTS.md` | `npm run lint && npm run typecheck` ✅ |
+| M1 Headless core (1.5d) | Domain, store, actions + middleware, nav, view models | `npm run test:core` ✅ (60 tests, ~0.4s) |
+| M2 CLI local (1d) | `inspect`, `run`, `run-script`, scenarios in CI | `todo run-script scenarios/happy-path.jsonl` ✅ |
 | M3 Mobile shell (2d) | Renderers, NavSync, expo-sqlite, Activity screen | Taps show up as `origin: user` |
 | M4 Remote mode (1.5d) | Bridge, `--remote`, screenshots | The same scenario passes on the simulator and the UI updates live |
 | M5 MCP (1.5d) | Registry-generated tools, confirmation policy | Headline demo (below) |

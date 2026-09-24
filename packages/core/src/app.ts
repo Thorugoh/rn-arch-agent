@@ -153,7 +153,7 @@ export async function createApp(opts: CreateAppOptions) {
       if (!ports.confirm) {
         return fail(
           'confirmation_required',
-          `${action.name} is destructive and needs the user's approval: ${summary}. Ask the user, then retry with their confirmation.`,
+          `${action.name} is destructive and needs the user's approval ("${summary}"). Ask the user, then retry with their confirmation.`,
           { action: action.name, input: parsed.data },
         );
       }

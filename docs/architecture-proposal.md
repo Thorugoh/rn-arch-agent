@@ -201,13 +201,12 @@ runs of the same scenario.
 ### 4.1 Local headless mode (CLI in Node)
 
 ```bash
-$ todo --fixture demo inspect
-{ "route": { "name": "lists" }, "viewModel": { "lists": [ { "id": "inbox", "name": "Inbox", "open": 3 } ] } }
-
-$ todo --fixture demo run todo.create '{"listId":"inbox","title":"Buy milk"}' --json
-$ todo --fixture demo run nav.push '{"name":"list","params":{"listId":"inbox"}}'
-$ todo --fixture demo inspect --json | jq '.viewModel.items | length'
+$ todo run state.load '{"fixture":"demo"}'          # state lives in .todo/state.json
+$ todo run todo.create '{"listId":"inbox","title":"Buy milk"}'
+$ todo run nav.push '{"route":{"name":"list","params":{"listId":"inbox"}}}'
+$ todo --json inspect | jq '.value.viewModel.items | length'
 4
+$ todo --fixture demo inspect                       # ephemeral, in memory, nothing saved
 ```
 
 The CLI also takes a script, `todo run-script scenario.jsonl`, so an agent can
@@ -313,7 +312,7 @@ A scenario file is the shared language between humans, agents and CI:
 For each feature, an agent works in checkpoints. A checkpoint moves on only when:
 
 1. **Plan:** the feature is split into small ordered slices, each named by the actions and screens it touches.
-2. **Headless proof:** actions, view models and scenarios are written first, and `pnpm test:core` is green.
+2. **Headless proof:** actions, view models and scenarios are written first, and `npm run test:core` is green.
 3. **UI:** the renderer is wired to the view model, and `todo --remote ios-sim run-script` passes.
 4. **Visual check:** screenshots are attached to the PR.
 5. **Review:** at least one adversarial agent reviewer (and, optionally, a second model), then a human's approval.

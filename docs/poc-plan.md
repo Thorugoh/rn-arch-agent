@@ -42,7 +42,7 @@ Auth, backend sync, OS intents (Siri / App Actions), and the in-app LLM chat
 
 | Concern | Choice | Why |
 |---|---|---|
-| Monorepo | pnpm workspaces + Turborepo | simple and fast |
+| Monorepo | npm workspaces (Turborepo later if needed) | no extra tooling to install |
 | App | Expo (dev client) + Expo Router | fast setup; the router is driven by `NavSync` |
 | Core store | `zustand/vanilla` | framework-free and tiny; React bindings only in the app |
 | Schemas | zod + `zod-to-json-schema` | one source for validation, CLI help and MCP tools |
@@ -60,13 +60,13 @@ Each milestone ends with a demo command that anyone (human or agent) can run.
 ### M0: Skeleton (0.5 day)
 - Monorepo, TS project refs, lint rule banning RN imports in `packages/core`.
 - `AGENTS.md` stub covering repo map, commands and the "headless first" rule.
-- ✅ `pnpm -r build && pnpm lint` passes.
+- ✅ `npm run lint && npm run typecheck` passes.
 
 ### M1: Headless core (1.5 days)
 - Domain (`Todo`, `List`), store, `defineAction`, middleware (validate → policy → exec → journal), ports.
 - Nav reducer and `defineScreen` view models for the three screens.
 - Deterministic `Clock` / `IdGen` for tests.
-- ✅ `pnpm test:core` runs 20+ tests in under 1s. No simulator involved.
+- ✅ `npm run test:core` runs 20+ tests in under 1s. No simulator involved.
 
 ### M2: CLI local mode (1 day)
 - `todo inspect | run <action> <json> | actions | run-script <file.jsonl>`, plus `--json` and `--fixture`.
@@ -147,7 +147,7 @@ for (const a of app.actions) {
 ## 6. Suggested build order for an agent
 
 1. Read `AGENTS.md` and this plan.
-2. Build M0 and M1, keeping `pnpm test:core` green after each action is added.
+2. Build M0 and M1, keeping `npm run test:core` green after each action is added.
 3. Build M2 and write `scenarios/happy-path.jsonl` before any UI.
 4. Build M3, then check the UI by eye.
 5. Build M4 and re-run the same scenario remotely.
