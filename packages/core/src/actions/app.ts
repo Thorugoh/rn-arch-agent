@@ -44,6 +44,7 @@ export const navReset = defineAction({
   name: 'nav.reset',
   description: 'Clear the navigation stack and open a route (defaults to the Lists screen).',
   risk: 'nav',
+  harness: true,
   input: z.object({ route: Route.optional() }),
   output: RouteResult,
   handler: ({ input, ctx }) => {
@@ -153,6 +154,7 @@ export const stateLoad = defineAction({
   name: 'state.load',
   description: `Replace ALL data with a fixture (${fixtureNames.join(', ')}). Agents need the user to confirm.`,
   risk: 'destructive',
+  harness: true,
   input: z.object({ fixture: z.enum(fixtureNames) }),
   output: z.object({ fixture: z.string() }),
   handler: ({ input, ctx }) => {

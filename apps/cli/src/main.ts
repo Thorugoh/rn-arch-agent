@@ -41,6 +41,7 @@ type GlobalOpts = {
   device?: string;
   relay: string;
   token?: string;
+  uiStrict?: boolean;
 };
 
 /** What commands run against: an in-process app, or the live app through the relay. */
@@ -108,6 +109,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
     .addOption(new Option('--fixture <name>', 'run in memory from a fixture; nothing is saved').choices(fixtureNames))
     .option('--json', 'machine-readable output (one JSON document)')
     .option('--as <origin>', 'who is acting: user | system | agent:<id>', 'user')
+    .option('--ui-strict', 'only allow what a user could do from the current screen (navigate first, item must be visible)')
     .option('--remote', 'run against the live app through the relay (todo serve)')
     .addOption(new Option('--device <name>', 'which connected app to target (name or prefix); needed only when several are connected').env('TODO_DEVICE'))
     .addOption(new Option('--relay <url>', 'relay URL').env('TODO_RELAY_URL').default(DEFAULT_RELAY_URL))
@@ -175,6 +177,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         origin: parseOrigin(opts.as),
         confirmed: local.yes,
         idempotencyKey: local.key,
+        uiStrict: opts.uiStrict,
       });
       report(res, opts.json);
     });
@@ -193,6 +196,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         const started = performance.now();
         const report = await runScenario(parseScenario(await readFile(file, 'utf8')), target.dispatch, {
           origin: parseOrigin(opts.as),
+          uiStrict: opts.uiStrict,
           delayMs: local.delay,
           // Print each step as it finishes, so the terminal keeps pace with the screen.
           onStep: (s) => {

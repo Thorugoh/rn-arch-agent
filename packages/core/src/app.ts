@@ -5,7 +5,7 @@ import { allActions } from './actions';
 import type { Origin } from './domain';
 import { fixtures } from './fixtures';
 import type { Ports } from './ports';
-import { inspect } from './screens';
+import { checkOnScreen, inspect } from './screens';
 import { AppState, JOURNAL_LIMIT, type Invocation, type JournalEntry } from './state';
 
 /** Set by the shell that owns the channel (UI, CLI, MCP), never taken from an agent's tool input. */
@@ -20,6 +20,11 @@ export type DispatchMeta = {
    * instead of asking through the Confirmer port. Defaults to true.
    */
   interactive?: boolean;
+  /**
+   * Strict UI mode: only allow what a user could do from the current screen (the screen's action
+   * guards, e.g. the todo must be visible). Reads and harness actions are always allowed.
+   */
+  uiStrict?: boolean;
 };
 
 export type ActionFailure = { code: ErrorCode; message: string; details?: unknown };
@@ -170,6 +175,14 @@ export async function createApp(opts: CreateAppOptions) {
         issues: parsed.error.issues,
         inputSchema: describeAction(action).inputSchema,
       });
+    }
+
+    if (meta.uiStrict && action.risk !== 'read' && !action.harness) {
+      const why = checkOnScreen(store.getState(), action.name, parsed.data);
+      if (why) {
+        const screen = inspect(store.getState());
+        return fail('not_on_screen', why, { route: screen.route, actions: screen.actions });
+      }
     }
 
     const decision = policy({ action, origin: meta.origin, input: parsed.data });

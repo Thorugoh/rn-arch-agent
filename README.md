@@ -25,6 +25,7 @@ npx todo run todo.create '{"title":"Buy milk"}' # state lives in .todo/state.jso
 npx todo inspect                                # current screen as JSON
 npx todo --as agent:claude run todo.delete '{"id":"t_…"}'   # blocked until a human approves (--yes)
 npx todo run-script scenarios/*.jsonl           # replay flows headlessly (~10ms each)
+npx todo --ui-strict run-script scenarios/happy-path.jsonl   # only what a user could tap, screen by screen
 
 npm run ios                                     # the Expo app in the iOS simulator (Expo Go)
 npm run e2e:ios                                 # Maestro UI smoke flows against it

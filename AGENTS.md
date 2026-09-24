@@ -39,6 +39,7 @@ npx todo inspect                      # current screen: route, actions, view mod
 npx todo run <action> '<json>'        # dispatch; state lives in .todo/state.json
 npx todo --fixture demo <cmd>         # in memory from a fixture, nothing saved
 npx todo --as agent:<id> run ...      # act as an agent (destructive actions need --yes)
+npx todo --ui-strict <cmd>            # only what a user could do from the current screen (navigate first)
 npx todo run-script scenarios/*.jsonl # replay scenarios (in memory unless --data)
 
 # Remote mode: the live app in the simulator (npm run ios)
@@ -63,7 +64,9 @@ Add `--json` to get a single `{ ok, value | error }` document. Errors carry a `c
    - a `risk`: `read`, `nav`, `write` or `destructive`
    - `summarize` for writes, `confirmText` for destructive actions, and `inverse` when it can be undone
    - a synchronous handler that validates first (throw `ActionError`) and then calls `setState`
-3. **View model.** If the screen changes, update `screens.ts`. Never compute display data in React.
+3. **View model and guards.** If the screen changes, update `screens.ts`. Never compute display data in React.
+   Each screen's `actions` map says what its UI offers (`true`, or a guard that returns why not, e.g.
+   "todo isn't visible"). Keep it in sync with the buttons: strict UI mode enforces it.
 4. **Scenario.** Add or extend a `scenarios/*.jsonl` file. The registry test fails if any action is
    missing from every scenario.
 5. **Green.** Run `npm run check`.
@@ -89,6 +92,7 @@ Add `--json` to get a single `{ ok, value | error }` document. Errors carry a `c
 - Sorting must be stable, with ties keeping insertion order. Don't tie-break on random IDs.
 - `DispatchMeta.confirmed` and `origin` come from the shell (a CLI flag, the UI, the MCP host), never from an agent's tool input.
 - CLI commands must flush storage before exiting. `main()` already does this for every booted app.
+- Strict UI mode (`--ui-strict`, `DispatchMeta.uiStrict`) rejects with `not_on_screen` anything the current screen doesn't offer. Reads and `harness` actions (`state.load`, `nav.reset`) are exempt. `happy-path.jsonl` must keep passing in strict mode, because a test enforces it.
 - Scripts must never wait on a human: scenario steps dispatch with `interactive: false`, so they get `confirmation_required` instead of a sheet on the device.
 - `--remote` is a plain flag. Pick a device with `--device <name>`, because an optional flag value would swallow the next command.
 - Always run `npm install` before `npx todo`. If the workspace bin isn't linked, npx fetches an unrelated public `todo` package.

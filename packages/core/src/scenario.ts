@@ -89,6 +89,8 @@ export async function runScenario(
   dispatch: Dispatch,
   opts: {
     origin?: Origin;
+    /** Strict UI mode for every step: only what a user could do from the current screen. */
+    uiStrict?: boolean;
     /** Pause between `run` steps, e.g. to watch a live app change on screen. `expect` steps (reads) don't wait. */
     delayMs?: number;
     /** Called as each step finishes, for live progress output. */
@@ -115,7 +117,7 @@ export async function runScenario(
 
     if ('run' in step) {
       // Scenarios never block on a human, so they behave the same headless and against a live app.
-      const res = await dispatch(step.run, input, { origin: step.as ?? origin, confirmed: step.yes, interactive: false });
+      const res = await dispatch(step.run, input, { origin: step.as ?? origin, confirmed: step.yes, interactive: false, uiStrict: opts.uiStrict });
       if (step.expectError) {
         const ok = !res.ok && res.error.code === step.expectError;
         if (!report(ok, ok ? `${step.run} failed with ${step.expectError} as expected` : `${step.run}: expected error ${step.expectError}, got ${res.ok ? 'success' : res.error.code}`)) break;

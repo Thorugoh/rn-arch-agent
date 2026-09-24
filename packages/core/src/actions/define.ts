@@ -19,6 +19,7 @@ export type ErrorCode =
   | 'forbidden'
   | 'confirmation_required'
   | 'confirmation_denied'
+  | 'not_on_screen'
   | 'internal';
 
 /** Throw from a handler to return a structured error an agent can act on. */
@@ -50,6 +51,8 @@ export interface ActionDef<I extends z.ZodType = z.ZodType, O extends z.ZodType 
   input: I;
   output: O;
   risk: Risk;
+  /** Test/debug setup with no UI equivalent (e.g. loading fixtures). Allowed in strict UI mode. */
+  harness?: boolean;
   /** Handlers are synchronous: validate first, then call setState once. */
   handler(x: { input: z.output<I>; ctx: ActionCtx }): z.input<O>;
   /** Human-readable past tense for the Activity screen, e.g. `added "Buy milk"`. */
