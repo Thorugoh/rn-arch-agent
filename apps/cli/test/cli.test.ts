@@ -80,6 +80,15 @@ describe('todo CLI', () => {
     expect(res.out).toContain('✓ L3 todo.create');
   });
 
+  it('accepts --delay and rejects bad values', async () => {
+    const ok = await cli('run-script', join(scenarios, 'undo.jsonl'), '--delay', '5');
+    expect(ok.code).toBe(0);
+    expect(ok.out).toMatch(/^▶ .*undo\.jsonl\n {2}✓ L2 state\.load/);
+    const bad = await cli('run-script', join(scenarios, 'undo.jsonl'), '--delay', 'soon');
+    expect(bad.code).not.toBe(0);
+    expect(bad.err).toContain('Expected milliseconds');
+  });
+
   it('fails run-script with the failing line', async () => {
     const { writeFile } = await import('node:fs/promises');
     const file = join(dir, 'bad.jsonl');

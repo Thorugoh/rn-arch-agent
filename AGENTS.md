@@ -44,6 +44,7 @@ npx todo run-script scenarios/*.jsonl # replay scenarios (in memory unless --dat
 # Remote mode: the live app in the simulator (npm run ios)
 npx todo serve                        # start the relay (keep it running)
 npx todo --remote <any command>       # e.g. inspect, run, run-script; the UI updates live
+npx todo --remote run-script <file> --delay 1500   # pause between actions to watch them on screen
 npx todo devices | watch | screenshot <file.png>
 ```
 

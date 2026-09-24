@@ -32,6 +32,7 @@ npm run e2e:ios                                 # Maestro UI smoke flows against
 npx todo serve                                  # relay: lets the CLI/agents drive the live app
 npx todo --remote inspect                       # the simulator's current screen as JSON
 npx todo --remote --as agent:claude run todo.delete '{"id":"t_…"}'   # the phone asks the user
+npx todo --remote run-script scenarios/happy-path.jsonl --delay 1500   # watch a scenario play out (replaces app data)
 npx todo watch                                  # live feed of every action in the app
 npx todo screenshot shot.png
 ```

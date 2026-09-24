@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import { Command, CommanderError, Option } from 'commander';
+import { Command, CommanderError, InvalidArgumentError, Option } from 'commander';
 import { jsonFileStorage, randomIds, systemClock } from '@todo/adapters-node';
 import { DEFAULT_RELAY_PORT, DEFAULT_RELAY_URL, connectRelay, type BridgeEvent, type RelayClient } from '@todo/bridge';
 import { startRelay, type RelayLogEvent } from '@todo/bridge/server';
@@ -182,25 +182,30 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
   program
     .command('run-script <files...>')
     .description('Replay JSONL scenarios and check their expectations. Local runs are in memory unless --data is given.')
-    .action(async (files: string[], _o, cmd: Command) => {
+    .option('--delay <ms>', 'pause between actions, to watch them happen in the live app (use with --remote)', parseDelay)
+    .addHelpText('after', '\nExample:\n  todo --remote run-script scenarios/happy-path.jsonl --delay 1500')
+    .action(async (files: string[], local: { delay?: number }, cmd: Command) => {
       const opts = cmd.optsWithGlobals<GlobalOpts>();
       const target = await boot(opts, { memoryByDefault: true });
       const results = [];
       for (const file of files) {
+        if (!opts.json) io.stdout(`▶ ${file}${target.remote ? ' (remote)' : ''}\n`);
         const started = performance.now();
         const report = await runScenario(parseScenario(await readFile(file, 'utf8')), target.dispatch, {
           origin: parseOrigin(opts.as),
+          delayMs: local.delay,
+          // Print each step as it finishes, so the terminal keeps pace with the screen.
+          onStep: (s) => {
+            if (opts.json) return;
+            const line = `  ${s.ok ? '✓' : '✗'} L${s.line} ${s.message}\n`;
+            if (s.ok) io.stdout(line);
+            else io.stderr(line);
+          },
         });
         const ms = Math.round(performance.now() - started);
         results.push({ file, ms, ...report });
         if (!report.ok) exitCode = 1;
-        if (opts.json) continue;
-        io.stdout(`${report.ok ? '✓' : '✗'} ${file} (${ms}ms${target.remote ? ', remote' : ''})\n`);
-        for (const s of report.steps) {
-          const line = `  ${s.ok ? '✓' : '✗'} L${s.line} ${s.message}\n`;
-          if (s.ok) io.stdout(line);
-          else io.stderr(line);
-        }
+        if (!opts.json) io.stdout(`${report.ok ? '✓' : '✗'} ${file} (${ms}ms)\n`);
       }
       if (opts.json) print(results, true);
     });
@@ -302,6 +307,12 @@ function formatRelayLog(e: RelayLogEvent): string | undefined {
     default:
       return undefined;
   }
+}
+
+function parseDelay(raw: string): number {
+  const ms = Number(raw);
+  if (!Number.isInteger(ms) || ms < 0) throw new InvalidArgumentError('Expected milliseconds, e.g. --delay 1500');
+  return ms;
 }
 
 function parseOrigin(raw: string): Origin {

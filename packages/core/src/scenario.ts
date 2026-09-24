@@ -87,16 +87,29 @@ const show = (v: unknown) => JSON.stringify(v);
 export async function runScenario(
   steps: Array<{ line: number; step: Step }>,
   dispatch: Dispatch,
-  opts: { origin?: Origin } = {},
+  opts: {
+    origin?: Origin;
+    /** Pause between `run` steps, e.g. to watch a live app change on screen. `expect` steps (reads) don't wait. */
+    delayMs?: number;
+    /** Called as each step finishes, for live progress output. */
+    onStep?: (report: StepReport) => void;
+  } = {},
 ): Promise<ScenarioReport> {
   const vars = new Map<string, unknown>();
   const reports: StepReport[] = [];
   const origin = opts.origin ?? 'user';
+  let ranBefore = false;
 
   for (const { line, step } of steps) {
+    if ('run' in step) {
+      if (ranBefore && opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs));
+      ranBefore = true;
+    }
     const input = resolveRefs(step.input ?? {}, vars);
     const report = (ok: boolean, message: string, value?: unknown) => {
-      reports.push({ line, step, ok, message, value });
+      const entry = { line, step, ok, message, value };
+      reports.push(entry);
+      opts.onStep?.(entry);
       return ok;
     };
 

@@ -26,4 +26,27 @@ describe('scenario runner', () => {
     expect(report.steps).toHaveLength(1);
     expect(report.steps[0]?.message).toBe('list.list: expected length 99, got 2');
   });
+
+  it('waits between run steps (not before expects) and reports steps as they finish', async () => {
+    const { app } = await makeApp();
+    const seen: number[] = [];
+    const started = Date.now();
+    const report = await runScenario(
+      parseScenario(
+        [
+          '{"run":"todo.create","input":{"title":"a"}}',
+          '{"expect":"list.list","length":2}',
+          '{"run":"todo.create","input":{"title":"b"}}',
+          '{"run":"todo.create","input":{"title":"c"}}',
+        ].join('\n'),
+      ),
+      app.dispatch,
+      { delayMs: 40, onStep: (s) => seen.push(s.line) },
+    );
+    expect(report.ok).toBe(true);
+    expect(seen).toEqual([1, 2, 3, 4]);
+    const elapsed = Date.now() - started;
+    expect(elapsed).toBeGreaterThanOrEqual(75); // two pauses: before steps 3 and 4
+    expect(elapsed).toBeLessThan(400);
+  });
 });
