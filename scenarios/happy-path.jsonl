@@ -1,0 +1,19 @@
+// A human's everyday flow: add, complete, filter, edit, navigate.
+{"run":"state.load","input":{"fixture":"empty"}}
+{"expect":"app.inspect","path":"route.name","equals":"lists"}
+{"run":"todo.create","input":{"title":"Buy milk"},"save":"milk"}
+{"run":"todo.create","input":{"title":"Call mom","listId":"inbox"}}
+{"run":"nav.push","input":{"route":{"name":"list","params":{"listId":"inbox"}}}}
+{"expect":"app.inspect","path":"viewModel.items","length":2}
+{"run":"todo.toggle","input":{"id":"$milk.id"}}
+{"expect":"app.inspect","path":"viewModel.counts","equals":{"all":2,"open":1,"done":1}}
+{"run":"ui.setFilter","input":{"filter":"open"}}
+{"expect":"app.inspect","path":"viewModel.items","contains":{"title":"Call mom","done":false}}
+{"expect":"app.inspect","path":"viewModel.items","length":1}
+{"run":"nav.push","input":{"route":{"name":"todo","params":{"todoId":"$milk.id"}}}}
+{"run":"todo.update","input":{"id":"$milk.id","title":"Buy oat milk","due":"2026-01-02T18:00:00.000Z"}}
+{"expect":"app.inspect","path":"viewModel.title","equals":"Buy oat milk"}
+{"run":"nav.back"}
+{"expect":"app.inspect","path":"route.name","equals":"list"}
+{"expect":"todo.get","input":{"id":"$milk.id"},"path":"done","equals":true}
+{"expect":"todo.list","input":{"listId":"inbox","filter":"done"},"length":1}

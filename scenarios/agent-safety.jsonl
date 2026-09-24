@@ -1,0 +1,15 @@
+// The headline demo, headless: an agent adds todos, needs approval to delete, and everything lands in Activity.
+{"run":"state.load","input":{"fixture":"demo"}}
+{"run":"todo.create","input":{"title":"Buy milk"},"as":"agent:claude"}
+{"run":"todo.create","input":{"title":"Call mom"},"as":"agent:claude"}
+{"run":"todo.delete","input":{"id":"t_dentist"},"as":"agent:claude","expectError":"confirmation_required"}
+{"expect":"todo.get","input":{"id":"t_dentist"},"path":"title","equals":"Book dentist"}
+{"run":"todo.delete","input":{"id":"t_dentist"},"as":"agent:claude","yes":true}
+{"run":"todo.create","input":{"title":"x","listId":"nope"},"as":"agent:claude","expectError":"not_found"}
+{"run":"todo.create","input":{"title":"  "},"as":"agent:claude","expectError":"invalid_input"}
+{"run":"state.load","input":{"fixture":"empty"},"as":"agent:claude","expectError":"confirmation_required"}
+{"run":"nav.push","input":{"route":{"name":"activity"}}}
+{"expect":"app.inspect","path":"viewModel.entries[0].text","equals":"Claude deleted \"Book dentist\""}
+{"expect":"app.inspect","path":"viewModel.entries[0].undoable","equals":true}
+{"expect":"journal.list","path":"[0].origin","equals":"agent:claude"}
+{"expect":"journal.list","length":4}

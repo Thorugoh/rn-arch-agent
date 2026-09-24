@@ -1,0 +1,15 @@
+// Every write is journaled and can be undone, most recent first.
+{"run":"state.load","input":{"fixture":"demo"}}
+{"run":"todo.delete","input":{"id":"t_report"},"save":"del"}
+{"expect":"todo.list","input":{"listId":"inbox"},"length":2}
+{"run":"journal.undo"}
+{"expect":"todo.get","input":{"id":"t_report"},"path":"title","equals":"Send weekly report"}
+{"run":"todo.restore","input":{"todo":"$del.deleted"},"expectError":"conflict"}
+{"run":"todo.toggle","input":{"id":"t_plants"}}
+{"run":"journal.undo"}
+{"expect":"todo.get","input":{"id":"t_plants"},"path":"done","equals":false}
+{"expect":"journal.list","path":"[0].summary","equals":"undid: completed \"Water the plants\""}
+{"run":"journal.undo","expectError":"not_found"}
+{"run":"todo.delete","input":{"id":"t_eggs"},"save":"eggs"}
+{"run":"todo.restore","input":{"todo":"$eggs.deleted"}}
+{"expect":"todo.list","input":{"listId":"groceries"},"length":2}
