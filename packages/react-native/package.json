@@ -1,0 +1,34 @@
+{
+  "name": "@agentic/react-native",
+  "version": "0.0.0",
+  "private": true,
+  "description": "React Native bindings: runtime provider, view-model hooks, navigation sync, confirmation queue, dev bridge, Expo adapters.",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./expo": "./src/adapters/expo.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentic/bridge": "*",
+    "@agentic/core": "*"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "@react-navigation/native": "^7.0.0",
+    "expo-sqlite": "*",
+    "expo-crypto": "*"
+  },
+  "peerDependenciesMeta": {
+    "expo-sqlite": {
+      "optional": true
+    },
+    "expo-crypto": {
+      "optional": true
+    }
+  }
+}

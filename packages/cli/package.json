@@ -1,0 +1,17 @@
+{
+  "name": "@agentic/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Builds a CLI for any app on the runtime: run actions, inspect screens, replay scenarios, drive the live app.",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentic/bridge": "*",
+    "@agentic/core": "*",
+    "@agentic/node": "*",
+    "commander": "^15.0.0"
+  }
+}

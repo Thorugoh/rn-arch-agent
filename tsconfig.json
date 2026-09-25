@@ -1,5 +1,6 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": { "types": ["node"] },
-  "include": ["packages/*/src", "packages/*/test", "apps/cli/src", "apps/cli/test", "vitest.config.ts"]
+  "include": ["packages/*/src", "packages/*/test", "examples/todo/*/src", "examples/todo/*/test", "vitest.config.ts"],
+  "exclude": ["packages/react-native", "examples/todo/mobile"]
 }

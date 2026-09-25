@@ -86,7 +86,7 @@ Each milestone ends with a demo command that anyone (human or agent) can run.
 - ✅ `todo --remote run-script scenarios/happy-path.jsonl` runs **the same scenario** on the simulator. The UI updates live and a screenshot is saved.
 
 ### M5: User agents via MCP (1.5 days)
-- `apps/mcp`: tools generated from the registry. Two modes: `--local` (shared JSON file) and `--remote` (bridge to the phone).
+- `@agentic/mcp` (plus a thin `examples/todo/mcp`): tools generated from the registry. Two modes: `--local` (shared JSON file) and `--remote` (bridge to the phone).
 - Policy: `origin: agent:mcp`. `todo.delete` either triggers a `ConfirmSheet` on the device (remote) or returns `confirmation_required` (local).
 - ✅ **Headline demo:**
   1. The app is open on the simulator and the MCP server is connected in remote mode.
@@ -126,7 +126,7 @@ export function createApp(ports: Ports) {
 ```
 
 ```ts
-// apps/mcp/src/server.ts
+// packages/mcp/src/… (sketch)
 for (const a of app.actions) {
   server.registerTool(a.name, { description: a.description, inputSchema: a.inputShape },
     async (input) => toMcpResult(await target.dispatch(a.name, input, { origin: 'agent:mcp' })));

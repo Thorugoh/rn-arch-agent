@@ -1,7 +1,13 @@
 # Agent-Addressable React Native Architecture — Proposal
 
-> Status: draft · 2026-09-24
+> Status: implemented (M0–M4) · 2026-09-24
 > Inspired by: Shopify Engineering, *"Back to native"* (2026-09-10)
+>
+> This is the original proposal. The implementation became reusable packages:
+> - `@agentic/core`, `bridge`, `node`, `cli` and `react-native` in `packages/`
+> - the todo app as an example in `examples/todo/`
+>
+> See [`README.md`](../README.md) and [`adding-to-an-app.md`](adding-to-an-app.md). Code samples below follow the implemented API.
 
 ## 1. What we are borrowing from Shopify (and what we are not)
 
@@ -47,7 +53,7 @@ three kinds of consumer:
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │ SHELLS (thin)                                                        │
-│  apps/mobile (Expo RN)   apps/cli (Node)   apps/mcp (Node)           │
+│  todo/mobile (Expo RN)   todo/cli (Node)   mcp (Node, M5)            │
 │  - renders view models   - REPL + --json   - MCP tools from registry │
 │  - taps → dispatch       - local | remote  - local | remote          │
 │  - dev bridge (WS)                                                   │
@@ -75,7 +81,7 @@ three kinds of consumer:
 - The state is serializable. The whole app state can be dumped, snapshotted or restored as JSON. Agents rely on this, and so do fixtures.
 
 ```ts
-// packages/core/src/state.ts
+// @agentic/core: runtime/runtime-state.ts (app data + navigation + journal)
 export type AppState = {
   todos: Record<TodoId, Todo>;
   lists: Record<ListId, List>;
@@ -87,7 +93,7 @@ export type AppState = {
 ### 3.2 Navigation as data
 
 ```ts
-// packages/core/src/nav/routes.ts
+// examples/todo/domain/src/routes.ts
 export type Route =
   | { name: 'lists' }
   | { name: 'list'; params: { listId: ListId } }
@@ -102,7 +108,7 @@ to any screen, and read where it is, without touching layout.
 ### 3.3 Screens as view models
 
 ```ts
-// packages/core/src/screens/list.ts
+// examples/todo/domain/src/screens/list-screen.ts
 export const listScreen = defineScreen({
   route: 'list',
   viewModel: (s, { listId }) => ({
@@ -117,7 +123,7 @@ export const listScreen = defineScreen({
 The React screen is a pure renderer:
 
 ```tsx
-// apps/mobile/src/screens/ListScreen.tsx
+// examples/todo/mobile/src/screens/list/ListScreen.tsx
 export function ListScreen({ listId }: Props) {
   const vm = useViewModel(listScreen, { listId });
   const dispatch = useDispatch();
@@ -139,24 +145,30 @@ milliseconds to produce.
 ### 3.4 Capability layer: the Action Registry
 
 ```ts
-// packages/core/src/actions/todo.ts
+// examples/todo/domain/src/actions/todos/create-todo.ts
 export const createTodo = defineAction({
   name: 'todo.create',
-  description: 'Create a todo in a list. Returns the new todo.',
-  input: z.object({ listId: ListId, title: z.string().min(1), due: z.string().datetime().optional() }),
-  output: Todo,
-  risk: 'write',                         // 'read' | 'write' | 'destructive'
-  handler: ({ input, ctx }) => ctx.store.update(s => addTodo(s, input, ctx.ids.next(), ctx.clock.now())),
+  description: 'Create a todo in a list (the Inbox by default). Returns the new todo.',
+  risk: 'write',                         // 'read' | 'nav' | 'write' | 'destructive'
+  input: z.object({ listId: z.string().default(INBOX_ID), title: TodoTitleSchema, due: DueDateSchema.optional() }),
+  output: TodoSchema,
+  handler: ({ input, context }) => {
+    findList(context.data(), input.listId);
+    const todo = { id: context.newId('t_'), listId: input.listId, title: input.title, done: false, … };
+    context.setData(saveTodo(todo));
+    return todo;
+  },
+  summarize: ({ input }) => `added "${input.title}"`,
+  undo: ({ output }) => ({ name: 'todo.delete', input: { id: output.id } }),
 });
 
+// examples/todo/domain/src/actions/todos/delete-todo.ts
 export const deleteTodo = defineAction({
   name: 'todo.delete',
-  description: 'Delete a todo permanently.',
-  input: z.object({ id: TodoId }),
-  output: z.object({ ok: z.literal(true) }),
   risk: 'destructive',                   // agent callers need confirmation
-  inverse: ({ before }) => ({ name: 'todo.restore', input: before }),  // enables undo
-  handler: /* ... */,
+  confirmText: ({ input, data }) => `Delete "${data.todos[input.id]?.title}"?`,
+  undo: ({ output }) => ({ name: 'todo.restore', input: { todo: output.deleted } }),
+  …
 });
 ```
 
@@ -253,7 +265,7 @@ The same registry, exposed to agents acting **for the user**:
 
 | Channel | How it works | POC? |
 |---|---|---|
-| **MCP server** (`apps/mcp`) | Serves registry actions as MCP tools. Runs locally (headless, on the same storage) or in remote mode against the phone. Later, as a hosted server against a sync backend. | ✅ |
+| **MCP server** (`@agentic/mcp`, M5) | Serves registry actions as MCP tools. Runs locally (headless, on the same storage) or in remote mode against the phone. Later, as a hosted server against a sync backend. | ✅ |
 | **In-app assistant** | A chat screen. The LLM gets registry tools filtered by policy, and each tool call goes through `dispatch(..., { origin: 'agent:assistant' })`. The user watches the UI change live. | stretch |
 | **OS intents** (Siri App Intents / Android App Actions) | A native module maps a curated subset (`todo.create`, `todo.list`) to intents that call into the JS registry. | later |
 
@@ -266,24 +278,23 @@ The same registry, exposed to agents acting **for the user**:
 ## 5. Monorepo layout
 
 ```
-rn-arch-agent/
-├─ AGENTS.md                  # how agents work in this repo (generated action table included)
-├─ packages/
-│  ├─ core/                   # domain, store, nav, screens, actions, ports — no RN imports
-│  ├─ adapters-node/
-│  ├─ adapters-rn/
-│  └─ bridge/                 # JSON-RPC types, WS client (app) + relay/server (node)
-├─ apps/
-│  ├─ mobile/                 # Expo app: renderers, NavSync, DevBridge, confirm sheet
-│  ├─ cli/                    # `todo` binary: local + remote
-│  └─ mcp/                    # MCP server built on the registry
-└─ scenarios/                 # .jsonl flows shared by tests, CLI and agents
+packages/                 # the architecture; reusable, knows nothing about todos
+├─ core/                  # @agentic/core: runtime, dispatch pipeline, screens, navigation, journal, scenarios
+├─ bridge/                # @agentic/bridge: remote-mode protocol, app host + client (platform-free)
+├─ node/                  # @agentic/node: file storage, ids, relay server
+├─ cli/                   # @agentic/cli: runCli({ name, app }) gives any app its CLI
+└─ react-native/          # @agentic/react-native: provider, hooks, navigation sync, confirmations, dev bridge
+examples/todo/            # the POC built on it
+├─ domain/                # @todo/domain: data, actions, screens, fixtures (pure TS)
+├─ cli/                   # @todo/cli: the `todo` binary (one config object)
+├─ mobile/                # @todo/mobile: the Expo app
+└─ scenarios/             # .jsonl flows shared by tests, the CLI and agents
 ```
 
 Guardrails, enforced in CI:
-- `eslint no-restricted-imports`: `packages/core` must not import `react`, `react-native` or `expo-*`.
-- `packages/core` tests run under Vitest in Node, with no simulator.
-- A registry lint: every action has a description, a schema, a risk level, and at least one scenario that covers it.
+- `eslint no-restricted-imports`: `core`, `bridge` and the todo domain can't import React, React Native, Expo or Node.
+- Core and domain tests run under Vitest in Node, with no simulator. Framework tests use tiny test apps, never the todo app.
+- Registry checks: every action is self-describing (object schemas), and together the scenarios use every action.
 
 ## 6. Testing pyramid (agent-friendly)
 

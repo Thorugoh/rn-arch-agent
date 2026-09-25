@@ -1,166 +1,116 @@
 # rn-arch-agent
 
-A proposed **agent-addressable React Native architecture**, and a todo-app proof of concept (POC) that shows it working. The goal is that **humans and AI agents use the same app through the same capability surface**:
+An **agent-addressable app architecture** for React Native, and a todo app built on it. Humans and AI agents use the same app through the same capability surface:
 
 - a person taps the UI,
-- a coding agent runs and tests the app from a command line, with or without a simulator,
+- a coding agent runs and tests the app from a CLI, with or without a simulator,
 - a user's assistant (for example, Claude through MCP) works in the app on the person's behalf.
 
-It is based on Shopify Engineering's [*"Back to native"*](https://shopify.engineering/back-to-native) (2026-09-10). Shopify returned to Swift and Kotlin; this project keeps React Native. What it copies is the architecture that made Shopify's agents effective:
+It is based on Shopify Engineering's [*"Back to native"*](https://shopify.engineering/back-to-native) (2026-09-10). Shopify moved to Swift and Kotlin; this project keeps React Native and copies the architecture that made their agents effective:
 
 - business logic that runs without the UI,
-- a command-line tool that can inspect the app, move between screens and perform actions without touching the UI,
+- a CLI that can inspect the app, navigate and perform actions without touching the UI,
 - a **remote mode** that drives the running app on a simulator with the same commands.
 
-> Status: M0–M4 done (headless core, CLI, Expo app, remote mode). Next: M5, MCP for user agents.
+> Status: M0–M4 done, restructured into reusable packages. Next: M5, MCP for user agents.
+
+## Repository layout
+
+```
+packages/                 The architecture: reusable, knows nothing about todos
+  core/                   @agentic/core          runtime: actions, dispatch pipeline, screens, navigation, journal/undo, scenarios
+  bridge/                 @agentic/bridge        remote-mode protocol, app host and client (platform-free)
+  node/                   @agentic/node          Node adapters (file storage, ids) and the relay server
+  cli/                    @agentic/cli           builds a CLI for any app: runCli({ name, app })
+  react-native/           @agentic/react-native  provider, hooks, navigation sync, confirmations, dev bridge, Expo adapters
+
+examples/todo/            The POC app built on it
+  domain/                 @todo/domain           data, actions, screens, fixtures (pure TypeScript)
+  cli/                    @todo/cli              the `todo` binary: one config object
+  mobile/                 @todo/mobile           Expo app that renders the domain's screens
+  scenarios/              JSONL flows run by tests, the CLI and agents
+```
+
+The dependency direction is one-way. Apps depend on packages; packages never depend on an app. `core`, `bridge` and `todo/domain` are platform-free, which lint enforces, so they run in Node and React Native.
 
 ## Quick start
 
 ```bash
 npm install
-npm run check                                   # lint (incl. headless guardrail) + typecheck + tests
+npm run check                                   # lint + typecheck + tests
 
 npx todo actions                                # the app's whole API
 npx todo run todo.create '{"title":"Buy milk"}' # state lives in .todo/state.json
 npx todo inspect                                # current screen as JSON
 npx todo --as agent:claude run todo.delete '{"id":"t_…"}'   # blocked until a human approves (--yes)
-npx todo run-script scenarios/*.jsonl           # replay flows headlessly (~10ms each)
-npx todo --ui-strict run-script scenarios/happy-path.jsonl   # only what a user could tap, screen by screen
+npx todo run-script examples/todo/scenarios/*.jsonl         # replay flows headlessly (~10ms each)
+npx todo --ui-strict run-script examples/todo/scenarios/happy-path.jsonl   # only what a user could tap
 
 npm run ios                                     # the Expo app in the iOS simulator (Expo Go)
 npm run e2e:ios                                 # Maestro UI smoke flows against it
 
-npx todo serve                                  # relay: lets the CLI/agents drive the live app
-npx todo --remote inspect                       # the simulator's current screen as JSON
+npx todo serve                                  # relay: lets the CLI and agents drive the live app
+npx todo --remote inspect                       # the simulator's current screen
 npx todo --remote --as agent:claude run todo.delete '{"id":"t_…"}'   # the phone asks the user
-npx todo --remote run-script scenarios/happy-path.jsonl --delay 1500   # watch a scenario play out (replaces app data)
+npx todo --remote run-script examples/todo/scenarios/happy-path.jsonl --delay 1500   # watch it play (replaces app data)
 npx todo watch                                  # live feed of every action in the app
 npx todo screenshot shot.png
 ```
 
-Run `npm install` before using `npx todo`. If the workspace bin isn't linked yet,
-npx will fetch an unrelated public package with the same name.
+Run `npm install` before `npx todo`. If the workspace bin isn't linked, npx fetches an unrelated public package with the same name.
+
+## How it works
+
+```
+ humans ─────── taps ─────────┐
+ coding agents ─ CLI, remote ─┼─►  runtime.dispatch(action, input, { origin })  ─►  app data, navigation, journal
+ user agents ── MCP, in-app ──┘        validate → strict UI? → policy/confirm → execute → journal → events
+```
+
+1. **Headless first.** All behavior lives in plain TypeScript that runs in Node. The phone is one shell among several.
+2. **Actions are the only way to change state.** Taps, the CLI, agents and tests all call the same actions.
+3. **Navigation is state**, owned by the runtime. React Navigation only renders it.
+4. **Screens are projections.** Each screen is a pure view model plus the actions its UI offers. React draws the view model, and agents read the same thing as JSON.
+5. **Self-describing.** Actions carry descriptions, zod schemas and risk levels. CLI help and agent tools are generated from them.
+6. **Every change records its origin** (`user`, `agent:<id>`, `system`). That gives the Activity feed, undo and permission checks.
+7. **Platform code sits behind ports** (storage, clock, ids, confirmation), with small Node and Expo adapters.
+
+**Safety for agents:** reads run freely, writes are journaled and undoable, and destructive actions need the user's approval (a sheet on the phone, a prompt in the terminal). Agents can be limited to scopes, and idempotency keys make retries safe. **Strict UI mode** (`--ui-strict`) only allows what a user could do from the current screen.
+
+## Using it in another app
+
+See **[`docs/adding-to-an-app.md`](docs/adding-to-an-app.md)**. In short:
+
+1. Write a domain package: data schema, routes, actions and screens with `createAppKit<Data, Route>()`, then `defineApp(...)`.
+2. Get a CLI with one config: `runCli({ name: 'myapp', app: myApp }, argv, processIO())`.
+3. In React Native, wrap the app in `<RuntimeProvider app={myApp} ports={…}>`. Render screens with `useViewModel`, dispatch with `useDispatch`, and sync navigation with `useNavigationSync`.
+
+The todo example is the reference. `examples/todo/domain` is about 30 small files (one action or screen per file), and the CLI is a single config object.
 
 ## Docs
 
 | Doc | Contents |
 |---|---|
-| [`docs/architecture-proposal.md`](docs/architecture-proposal.md) | Principles, layers, action registry, the three ways to reach the app, safety rules for agents, testing, trade-offs, agent development loop |
-| [`docs/poc-plan.md`](docs/poc-plan.md) | POC scope, stack, milestones and demos, first code to write, success criteria |
+| [`docs/adding-to-an-app.md`](docs/adding-to-an-app.md) | Step-by-step guide: domain, CLI, React Native shell, remote mode |
+| [`docs/architecture-proposal.md`](docs/architecture-proposal.md) | The original proposal: principles, layers, agents as users, testing, trade-offs |
+| [`docs/poc-plan.md`](docs/poc-plan.md) | POC milestones and success criteria |
+| [`AGENTS.md`](AGENTS.md) | How to work in this repo (humans and coding agents) |
 
-## How it works
+## Milestones
 
-```
-            ┌──────────────── one capability surface ────────────────┐
- humans  →  │  UI taps  ─┐                                           │
- dev agents → CLI / remote ─┼─►  Action Registry  ─►  Core (headless)  │
- user agents → MCP / in-app / OS intents ─┘                            │
-            └────────────────────────────────────────────────────────┘
-```
-
-### Principles
-
-1. **Headless first.** If a behavior can't be exercised from Node, it doesn't exist yet.
-2. **Actions are the only way to change state.** The UI, the CLI, MCP and tests all call `dispatch(action, input)`.
-3. **Navigation is state.** The router renders the core's route stack; it doesn't own it.
-4. **Screens are projections.** Each screen has a pure `viewModel(state)`. React renders it, and agents read it as JSON.
-5. **Self-describing.** Every action has a name, a description, zod schemas and a risk level. CLI help and MCP tools are generated from them.
-6. **Every call records its origin** (`user`, `agent:<id>` or `system`), which gives audit, undo and permission checks.
-7. **Platform code sits behind ports** (storage, clock, IDs, notifications), with small Node and React Native adapters.
-
-### Layers
-
-```
-SHELLS        apps/mobile (Expo)  ·  apps/cli (Node)  ·  apps/mcp (Node)
-CAPABILITIES  Action Registry: validate → policy → confirm → execute → journal → notify
-CORE          domain · store · nav · screen view models · ports   (pure TS, no RN imports)
-ADAPTERS      adapters-node (memory / file / sqlite)  ·  adapters-rn (expo-sqlite, notifications)
-```
-
-### Defining an action
-
-```ts
-export const createTodo = defineAction({
-  name: 'todo.create',
-  description: 'Create a todo in a list. Returns the new todo.',
-  input: z.object({ listId: ListId, title: z.string().min(1), due: z.string().datetime().optional() }),
-  output: Todo,
-  risk: 'write',                              // 'read' | 'write' | 'destructive'
-  handler: ({ input, ctx }) => ctx.store.update(s => addTodo(s, input, ctx.ids.next(), ctx.clock.now())),
-});
-```
-
-### Three ways to reach the app
-
-**1. Headless (CLI in Node).** Iterations take milliseconds and no simulator is involved.
-
-```bash
-todo run todo.create '{"listId":"inbox","title":"Buy milk"}'
-todo --json inspect                           # current route + view model
-todo --fixture demo inspect                   # in memory from a fixture, nothing saved
-todo run-script scenarios/happy-path.jsonl    # replay and assert a whole flow
-```
-
-**2. Remote (CLI → running app).** In development builds the app dials out to a relay (`todo serve`) over JSON-RPC/WebSocket. The CLI runs the same commands against the app on a simulator or device, and the UI updates live.
-
-```bash
-todo --remote run-script scenarios/happy-path.jsonl
-```
-
-Bridge methods: `actions.list`, `actions.invoke`, `app.inspect`, `state.get` / `state.load`, `events.subscribe`, `dev.screenshot`.
-
-**3. User agents.** An MCP server generated from the registry, running either locally or remotely against the phone. An in-app assistant and Siri / Android App Actions come later.
-
-### Safety for agents acting on a user's behalf
-
-- `read` actions run freely. `write` actions run and can be undone. `destructive` actions need the user's confirmation, either in the app or through an MCP elicitation.
-- Every agent action is journaled with its origin and shown on an **Activity** screen with **Undo**.
-- Each agent gets its own permission scope, and `idempotencyKey` prevents duplicates when an agent retries.
-
-## Repository layout (planned)
-
-```
-rn-arch-agent/
-├─ AGENTS.md                  # how agents work in this repo
-├─ packages/
-│  ├─ core/                   # domain, store, nav, screens, actions, ports (no RN imports, enforced by lint)
-│  ├─ adapters-node/
-│  ├─ adapters-rn/
-│  └─ bridge/                 # JSON-RPC protocol, app host + client (platform-free), relay (node)
-├─ apps/
-│  ├─ mobile/                 # Expo app: renderers, NavSync, DevBridge, ConfirmSheet
-│  ├─ cli/                    # `todo` binary, local + remote
-│  └─ mcp/                    # MCP server built from the registry
-└─ scenarios/                 # .jsonl flows shared by tests, the CLI and agents
-```
-
-## Todo-app POC
-
-**Features:** lists, and todos you can create, rename, mark done, give a due date, delete and restore. Plus all / open / done filters and an Activity screen with Undo.
-
-**Stack:** npm workspaces · Expo + Expo Router · `zustand/vanilla` · zod · expo-sqlite · FlashList · commander + `ws` · `@modelcontextprotocol/sdk` · Vitest + RNTL.
-
-| Milestone | Deliverable | Demo |
+| Milestone | Deliverable | Status |
 |---|---|---|
-| M0 Skeleton (0.5d) | Monorepo, lint rule banning RN imports in core, `AGENTS.md` | `npm run lint && npm run typecheck` ✅ |
-| M1 Headless core (1.5d) | Domain, store, actions + middleware, nav, view models | `npm run test:core` ✅ (60 tests, ~0.4s) |
-| M2 CLI local (1d) | `inspect`, `run`, `run-script`, scenarios in CI | `todo run-script scenarios/happy-path.jsonl` ✅ |
-| M3 Mobile shell (2d) | Renderers, NavSync, expo-sqlite, Activity screen | Taps show up as `origin: user` ✅ |
-| M4 Remote mode (1.5d) | Bridge, `--remote`, screenshots | The same scenario passes on the simulator and the UI updates live ✅ |
-| M5 MCP (1.5d) | Registry-generated tools, confirmation policy | Headline demo (below) |
-| M6 Stretch (2d) | In-app assistant using the Claude API and registry tools | The headline demo, entirely inside the app |
+| M0 Skeleton | Monorepo, headless lint guardrail, `AGENTS.md` | ✅ |
+| M1 Headless core | Runtime: actions, dispatch pipeline, navigation, view models, journal | ✅ |
+| M2 CLI | `inspect`, `run`, `run-script`, scenarios in CI | ✅ |
+| M3 Mobile shell | Expo app rendering view models, navigation sync, SQLite, Activity | ✅ |
+| M4 Remote mode | Relay, `--remote`, `watch`, `screenshot`, approval on the device | ✅ |
+| — Restructure | Reusable `@agentic/*` packages and the todo app as an example | ✅ |
+| M5 MCP | Agent tools generated from actions; the headline demo | next |
+| M6 Stretch | In-app assistant using the same actions | — |
 
-**Headline demo.** With the app open on the simulator, the user tells Claude: *"Add 'buy milk' and 'call mom' to my inbox, and clear everything I finished."*
+**Headline demo (M5).** With the app open, the user tells Claude: *"Add 'buy milk' and 'call mom' to my inbox, and clear everything I finished."*
 
-1. The todos appear live in the app.
-2. The delete opens a confirmation sheet on the phone.
-3. The Activity screen shows each step as "Claude …", with Undo.
-
-## Success criteria
-
-- Every action is covered by scenarios that run in Node.
-- `happy-path.jsonl` passes both headless and against the simulator, unchanged.
-- A headless scenario run takes under 1s.
-- `packages/core` has zero React Native imports, proven by lint.
-- Destructive actions from agents always need confirmation, and every agent action can be undone.
-- An agent builds one new feature working only through the CLI and tests, and a human reviews it.
+1. The todos appear live.
+2. The delete asks for approval on the phone.
+3. Activity shows "Claude …" with Undo.

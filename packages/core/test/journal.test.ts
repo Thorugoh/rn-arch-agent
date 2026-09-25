@@ -1,91 +1,58 @@
 import { describe, expect, it } from 'vitest';
-import { makeApp, unwrap } from './helpers';
+import { describeJournal } from '../src';
+import { asAgent, asUser, makeRuntime, valueOf } from './support/make-runtime';
 
-describe('journal', () => {
-  it('records writes with their origin and a readable summary', async () => {
-    const { app } = await makeApp();
-    const res = await app.dispatch('todo.toggle', { id: 't_eggs' }, { origin: 'agent:claude' });
-    expect(res).toMatchObject({ ok: true, entryId: 'j_1' });
-    expect(app.getState().journal[0]).toMatchObject({
+describe('journal and undo', () => {
+  it('records writes with origin, summary and how to undo them', async () => {
+    const { runtime } = await makeRuntime();
+    const result = await runtime.dispatch('note.add', { text: 'Gamma' }, asAgent);
+    expect(result).toMatchObject({ ok: true, entryId: 'j_1' });
+    expect(runtime.getState().journal[0]).toMatchObject({
       id: 'j_1',
-      action: 'todo.toggle',
+      action: 'note.add',
       origin: 'agent:claude',
-      summary: 'completed "Eggs"',
-      inverse: { name: 'todo.toggle', input: { id: 't_eggs', done: false } },
+      summary: 'added "Gamma"',
+      undo: { name: 'note.remove', input: { id: 'n_1' } },
     });
   });
 
-  it('does not journal reads, navigation, or failures', async () => {
-    const { app } = await makeApp();
-    await app.dispatch('todo.list', { listId: 'inbox' }, { origin: 'user' });
-    await app.dispatch('nav.push', { route: { name: 'activity' } }, { origin: 'user' });
-    await app.dispatch('ui.setFilter', { filter: 'done' }, { origin: 'user' });
-    await app.dispatch('todo.toggle', { id: 'missing' }, { origin: 'user' });
-    expect(app.getState().journal).toHaveLength(0);
+  it('does not journal reads, navigation or failures', async () => {
+    const { runtime } = await makeRuntime();
+    await runtime.dispatch('note.get', { id: 'n_a' }, asUser);
+    await runtime.dispatch('nav.push', { route: { name: 'note', params: { noteId: 'n_a' } } }, asUser);
+    await runtime.dispatch('note.get', { id: 'missing' }, asUser);
+    expect(runtime.getState().journal).toEqual([]);
   });
 
-  it('undoes create, update and delete', async () => {
-    const { app } = await makeApp();
-    const created = unwrap(await app.dispatch<{ id: string }>('todo.create', { title: 'Temp' }, { origin: 'user' }));
-    unwrap(await app.dispatch('journal.undo', {}, { origin: 'user' }));
-    expect(app.getState().todos[created.id]).toBeUndefined();
-
-    unwrap(await app.dispatch('todo.update', { id: 't_eggs', title: 'Duck eggs' }, { origin: 'user' }));
-    unwrap(await app.dispatch('journal.undo', {}, { origin: 'user' }));
-    expect(app.getState().todos.t_eggs?.title).toBe('Eggs');
-
-    const before = app.getState().todos.t_eggs;
-    unwrap(await app.dispatch('todo.delete', { id: 't_eggs' }, { origin: 'user' }));
-    unwrap(await app.dispatch('journal.undo', {}, { origin: 'user' }));
-    expect(app.getState().todos.t_eggs).toEqual(before);
+  it('undoes the latest change, then older ones', async () => {
+    const { runtime } = await makeRuntime();
+    await runtime.dispatch('note.remove', { id: 'n_a' }, asUser);
+    await runtime.dispatch('note.add', { text: 'Gamma' }, asUser);
+    valueOf(await runtime.dispatch('journal.undo', {}, asUser));
+    expect(runtime.getState().data.notes.n_1).toBeUndefined();
+    valueOf(await runtime.dispatch('journal.undo', {}, asUser));
+    expect(runtime.getState().data.notes.n_a).toEqual({ id: 'n_a', text: 'Alpha' });
+    expect(await runtime.dispatch('journal.undo', {}, asUser)).toMatchObject({ ok: false, error: { code: 'not_found' } });
   });
 
-  it('undoes a specific older entry and refuses to undo it twice', async () => {
-    const { app } = await makeApp();
-    const first = await app.dispatch('todo.toggle', { id: 't_eggs' }, { origin: 'user' });
-    await app.dispatch('todo.toggle', { id: 't_plants' }, { origin: 'user' });
-    const entryId = first.ok ? first.entryId : undefined;
-    unwrap(await app.dispatch('journal.undo', { entryId }, { origin: 'agent:claude' }));
-    expect(app.getState().todos.t_eggs?.done).toBe(false);
-    expect(app.getState().todos.t_plants?.done).toBe(true);
-    expect(await app.dispatch('journal.undo', { entryId }, { origin: 'user' })).toMatchObject({
+  it('refuses to undo twice, and reports conflicts when things changed since', async () => {
+    const { runtime } = await makeRuntime();
+    const added = await runtime.dispatch('note.add', { text: 'Gamma' }, asUser);
+    const entryId = added.ok ? added.entryId : undefined;
+    await runtime.dispatch('note.remove', { id: 'n_1' }, asUser);
+    expect(await runtime.dispatch('journal.undo', { entryId }, asUser)).toMatchObject({
       ok: false,
-      error: { code: 'conflict' },
+      error: { code: 'conflict', message: expect.stringContaining('Cannot undo "added "Gamma""') },
     });
   });
 
-  it('reports a conflict when the undo target has changed since', async () => {
-    const { app } = await makeApp();
-    await app.dispatch('todo.create', { title: 'Temp' }, { origin: 'user' });
-    const created = await app.dispatch('journal.list', { limit: 1 }, { origin: 'user' });
-    await app.dispatch('todo.delete', { id: 't_1' }, { origin: 'user' });
-    const entryId = created.ok ? (created.value as Array<{ id: string }>)[0]!.id : '';
-    const res = await app.dispatch('journal.undo', { entryId }, { origin: 'user' });
-    expect(res).toMatchObject({ ok: false, error: { code: 'conflict' } });
-  });
-
-  it('shows agent activity with undo in the activity view model', async () => {
-    const { app } = await makeApp();
-    await app.dispatch('todo.create', { title: 'Buy milk' }, { origin: 'agent:claude' });
-    await app.dispatch('nav.push', { route: { name: 'activity' } }, { origin: 'user' });
-    expect(app.inspect().viewModel).toMatchObject({
-      entries: [{ text: 'Claude added "Buy milk"', byAgent: true, undoable: true, undone: false }],
-    });
-  });
-});
-
-describe('onDispatch', () => {
-  it('emits every dispatch, including failures, with the journal summary', async () => {
-    const { app } = await makeApp();
-    const events: Array<{ name: string; ok: boolean; summary?: string; origin: string }> = [];
-    const off = app.onDispatch((e) => events.push({ name: e.name, ok: e.result.ok, summary: e.summary, origin: e.meta.origin }));
-    await app.dispatch('todo.toggle', { id: 't_eggs' }, { origin: 'user' });
-    await app.dispatch('todo.delete', { id: 't_eggs' }, { origin: 'agent:claude' });
-    off();
-    await app.dispatch('todo.toggle', { id: 't_eggs' }, { origin: 'user' });
-    expect(events).toEqual([
-      { name: 'todo.toggle', ok: true, summary: 'completed "Eggs"', origin: 'user' },
-      { name: 'todo.delete', ok: false, summary: undefined, origin: 'agent:claude' },
+  it('describes the journal for an activity feed', async () => {
+    const { runtime } = await makeRuntime();
+    await runtime.dispatch('note.add', { text: 'Gamma' }, asAgent);
+    await runtime.dispatch('journal.undo', {}, asUser);
+    expect(describeJournal(runtime.getState().journal)).toMatchObject([
+      { text: 'You undid: added "Gamma"', byAgent: false, undoable: false },
+      { text: 'Claude added "Gamma"', byAgent: true, undoable: false, undone: true },
     ]);
   });
 });

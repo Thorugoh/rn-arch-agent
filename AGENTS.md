@@ -1,98 +1,98 @@
 # AGENTS.md
 
-How to work in this repo, whether you're a coding agent or a human. The architecture is described in
-[`docs/architecture-proposal.md`](docs/architecture-proposal.md) and the roadmap in
-[`docs/poc-plan.md`](docs/poc-plan.md).
+How to work in this repo, whether you're a coding agent or a human.
+- **Overview:** [`README.md`](README.md)
+- **Building an app on the packages:** [`docs/adding-to-an-app.md`](docs/adding-to-an-app.md)
 
 ## The one rule: headless first
 
-All behavior lives in `packages/core` (pure TypeScript, runs in Node). If you can't exercise
-something with `npx todo` or a Vitest test, it doesn't exist yet. UI code only renders view models
-and dispatches actions.
+All behavior lives in platform-free TypeScript that runs in Node. If you can't exercise something with the CLI or a Vitest test, it doesn't exist yet. React Native code only renders view models and dispatches actions.
 
-Lint enforces this: `packages/core/src` cannot import React, React Native, Expo or Node built-ins.
-Platform code goes behind a port in `packages/core/src/ports.ts`, with adapters in `packages/adapters-*`.
+Lint enforces this. These packages can't import React, React Native, Expo or Node built-ins:
+- `packages/core`
+- `packages/bridge`
+- `examples/todo/domain`
 
 ## Repo map
 
 | Path | What |
 |---|---|
-| `packages/core/src/actions/` | The action registry. It is the app's entire API: `todo.*`, `list.*`, `nav.*`, `ui.*`, `journal.*`, `app.inspect`, `state.*` |
-| `packages/core/src/app.ts` | `createApp` plus the dispatch pipeline: validate → policy → confirm → execute → journal |
-| `packages/core/src/screens.ts` | One `viewModel(state)` per screen. `app.inspect` returns the current one |
-| `packages/core/src/nav.ts` | Navigation stack as data |
-| `packages/core/src/scenario.ts` | JSONL scenario runner, shared by tests, the CLI and remote mode |
-| `packages/adapters-node/` | JSON file storage, system clock, random IDs |
-| `packages/bridge/` | Remote mode: JSON-RPC protocol, app host and client (platform-free), relay (`src/server.ts`, Node) |
-| `apps/cli/` | The `todo` CLI |
-| `apps/mobile/` | Expo app: a thin renderer over core. See `apps/mobile/AGENTS.md` for Expo and navigation rules |
-| `scenarios/*.jsonl` | Executable flows, run in CI |
+| `packages/core` | `@agentic/core`, the runtime. `runtime/` (createRuntime, app definition, persistence), `dispatch/` (pipeline and its `steps/`), `actions/`, `screens/`, `navigation/`, `journal/`, `built-in-actions/`, `scenarios/`, `adapters/` |
+| `packages/bridge` | `@agentic/bridge`. Remote-mode protocol, app host and client (platform-free) |
+| `packages/node` | `@agentic/node`. File storage, random ids, and the relay server |
+| `packages/cli` | `@agentic/cli`. `runCli(config)`: one file per command in `commands/`, local/remote `targets/` |
+| `packages/react-native` | `@agentic/react-native`. `RuntimeProvider`, hooks, `useNavigationSync`, confirmation queue, dev bridge; Expo adapters at `/expo` |
+| `examples/todo/domain` | `@todo/domain`. Todo data (`model/`), `routes.ts`, `actions/` (one per file), `screens/`, `fixtures.ts`, `todo-app.ts` |
+| `examples/todo/cli` | `@todo/cli`. The `todo` binary: `todo-cli.ts` is its whole config |
+| `examples/todo/mobile` | `@todo/mobile`. The Expo app. See `examples/todo/mobile/AGENTS.md` |
+| `examples/todo/scenarios` | JSONL flows, run by tests, the CLI and against the live app |
+
+Dependencies point one way: examples → packages. Packages never import an example.
 
 ## Commands
 
 ```bash
-npm run check                         # lint + typecheck + all tests; run before every commit
-npm run test:core                     # core tests only (~0.4s)
-npx todo actions [--json]             # list actions (with JSON Schemas when --json)
-npx todo describe todo.create         # one action's schemas
-npx todo inspect                      # current screen: route, actions, view model
-npx todo run <action> '<json>'        # dispatch; state lives in .todo/state.json
-npx todo --fixture demo <cmd>         # in memory from a fixture, nothing saved
-npx todo --as agent:<id> run ...      # act as an agent (destructive actions need --yes)
-npx todo --ui-strict <cmd>            # only what a user could do from the current screen (navigate first)
-npx todo run-script scenarios/*.jsonl # replay scenarios (in memory unless --data)
+npm run check                          # lint + typecheck (root, RN package, mobile) + all tests; run before every commit
+npx vitest run --project core          # one project: core | node | todo
+npx todo actions [--json]              # every action (with JSON Schemas when --json)
+npx todo describe todo.create          # one action's schemas
+npx todo inspect                       # current screen: route, actions, view model
+npx todo run <action> '<json>'         # dispatch; state lives in .todo/state.json
+npx todo --fixture demo <command>      # in memory from a fixture, nothing saved
+npx todo --as agent:<id> run …         # act as an agent (destructive actions need --yes)
+npx todo --ui-strict <command>         # only what a user could do from the current screen
+npx todo run-script examples/todo/scenarios/*.jsonl   # replay scenarios (in memory unless --data)
 
 # Remote mode: the live app in the simulator (npm run ios)
-npx todo serve                        # start the relay (keep it running)
-npx todo --remote <any command>       # e.g. inspect, run, run-script; the UI updates live
-npx todo --remote run-script <file> --delay 1500   # pause between actions to watch them on screen
+npx todo serve                         # the relay (keep it running)
+npx todo --remote <command>            # inspect, run, run-script …; the UI updates live
+npx todo --remote run-script <file> --delay 1500      # pause between actions to watch them
 npx todo devices | watch | screenshot <file.png>
 ```
 
-Remote `run-script` runs `state.load` like any scenario, which **replaces the app's data**. Avoid it on a simulator that holds data someone cares about.
+`--json` prints one `{ ok, value | error }` document. Errors carry a `code`:
+- `invalid_input` (includes the input schema)
+- `not_found`, `conflict`, `forbidden`
+- `not_on_screen`
+- `confirmation_required`, `confirmation_denied`
 
-Add `--json` to get a single `{ ok, value | error }` document. Errors carry a `code`
-(`invalid_input`, `not_found`, `conflict`, `forbidden`, `confirmation_required`, …), and
-`invalid_input` includes the action's `inputSchema`.
+Remote `run-script` starts with `state.load`, which **replaces the app's data**. Avoid it on a simulator whose data someone cares about.
 
 ## Adding a feature (checkpoint loop)
 
 1. **Plan** small slices, each named by the actions and screens it touches.
-2. **Actions first.** Add or extend a `defineAction` in `packages/core/src/actions/`. Every action needs:
-   - a clear `description` (agents read it as the tool description)
-   - zod `input` (a top-level object) and `output`
-   - a `risk`: `read`, `nav`, `write` or `destructive`
-   - `summarize` for writes, `confirmText` for destructive actions, and `inverse` when it can be undone
-   - a synchronous handler that validates first (throw `ActionError`) and then calls `setState`
-3. **View model and guards.** If the screen changes, update `screens.ts`. Never compute display data in React.
-   Each screen's `actions` map says what its UI offers (`true`, or a guard that returns why not, e.g.
-   "todo isn't visible"). Keep it in sync with the buttons: strict UI mode enforces it.
-4. **Scenario.** Add or extend a `scenarios/*.jsonl` file. The registry test fails if any action is
-   missing from every scenario.
+2. **Actions first.** Add `examples/todo/domain/src/actions/<area>/<verb>-<noun>.ts` with `defineAction` from `../kit`. Every action needs:
+   - a clear `description` (agents read it)
+   - an object `input` schema and an `output` schema
+   - a `risk`
+   - `summarize` (writes), `confirmText` (destructive), and `undo` when it can be reversed
+   - a synchronous handler that validates first (throws `ActionError`), then calls `setData` once
+
+   Register it in `actions/index.ts`.
+3. **View model and guards.** Update the screen in `screens/`. Never compute display data in React. The screen's `actions` map says what its UI offers (`true`, or a guard that returns why not). Keep it in sync with the buttons.
+4. **Scenario.** Add or extend a file in `examples/todo/scenarios/`. A test fails if any action is missing from every scenario.
 5. **Green.** Run `npm run check`.
-6. **UI** (from M3): render the view model and dispatch actions. No logic.
+6. **UI.** Render the view model and dispatch the action in `examples/todo/mobile`. No logic.
 7. **Commit** one checkpoint at a time.
 
-## Scenario format
+Changing the **framework** (`packages/*`) follows the same loop. Test with the tiny apps in `packages/core/test/support/notes-app.ts` and `packages/node/test/support/counter-app.ts`, never with the todo app.
 
-```jsonl
-// comments are allowed
-{"run":"state.load","input":{"fixture":"demo"}}
-{"run":"todo.create","input":{"title":"Buy milk"},"save":"milk"}
-{"run":"todo.toggle","input":{"id":"$milk.id"}}
-{"run":"todo.delete","input":{"id":"$milk.id"},"as":"agent:claude","expectError":"confirmation_required"}
-{"expect":"app.inspect","path":"viewModel.items[0].done","equals":true}
-{"expect":"todo.list","input":{"listId":"inbox"},"length":3}
-{"expect":"app.inspect","path":"viewModel.items","contains":{"title":"Buy milk"}}
-```
+## Code style
+
+- **One concept per file,** named after it (`create-todo.ts`, `check-permission.ts`, `TodoRow.tsx`). Aim to keep files under ~100 lines.
+- **Descriptive names:** `viewModel`, `context`, `theme`, `result`, not `vm`, `ctx`, `t`, `res`.
+- **Object arguments** for functions with more than two parameters (`summarize({ input, output, before })`).
+- **Pure functions** for state changes (`saveTodo(todo)(data)`, `pushRoute(stack, route)`). Side effects only at the edges (ports).
+- **Comments explain why, not what.**
 
 ## Conventions and lessons learned
 
-- Tool input schemas must be objects at the top level, because MCP requires it. Wrap unions: `nav.push` takes `{ route }`.
-- Sorting must be stable, with ties keeping insertion order. Don't tie-break on random IDs.
-- `DispatchMeta.confirmed` and `origin` come from the shell (a CLI flag, the UI, the MCP host), never from an agent's tool input.
-- CLI commands must flush storage before exiting. `main()` already does this for every booted app.
-- Strict UI mode (`--ui-strict`, `DispatchMeta.uiStrict`) rejects with `not_on_screen` anything the current screen doesn't offer. Reads and `harness` actions (`state.load`, `nav.reset`) are exempt. `happy-path.jsonl` must keep passing in strict mode, because a test enforces it.
-- Scripts must never wait on a human: scenario steps dispatch with `interactive: false`, so they get `confirmation_required` instead of a sheet on the device.
-- `--remote` is a plain flag. Pick a device with `--device <name>`, because an optional flag value would swallow the next command.
-- Always run `npm install` before `npx todo`. If the workspace bin isn't linked, npx fetches an unrelated public `todo` package.
+- **Tool input schemas must be objects at the top level** (MCP requires it). Wrap unions, as in `nav.push { route }`.
+- **Sorting must be stable,** with ties keeping insertion order. Don't tie-break on random ids.
+- **`origin`, `confirmed`, `interactive` and `uiStrict` come from the shell** (a CLI flag, the UI, the MCP host), never from an agent's tool input.
+- **Scripts never wait on a human.** Scenario steps dispatch with `interactive: false`, so they get `confirmation_required` instead of a sheet on the device.
+- **Strict UI mode rejects anything the current screen doesn't offer** with `not_on_screen`. Reads and `harness` actions (`state.load`, `nav.reset`) are exempt. `happy-path.jsonl` must keep passing in strict mode.
+- **The runtime's navigation stack is the source of truth.** React Navigation route keys are minted per visit (`@agentic/react-native/navigation/route-keys.ts`), and resets keep the navigator key.
+- **`--remote` is a plain flag.** Pick a device with `--device <name>`, because an optional flag value would swallow the next command.
+- **Changing the stored data shape needs a migration** (`withMigration`), so existing users keep their data.
+- **Run `npm install` before `npx todo`.** If the workspace bin isn't linked, npx fetches an unrelated public `todo` package.

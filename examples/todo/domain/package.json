@@ -1,0 +1,15 @@
+{
+  "name": "@todo/domain",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The todo app's domain: data, actions, screens and fixtures, defined with @agentic/core.",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentic/core": "*",
+    "zod": "^4.6.5"
+  }
+}
