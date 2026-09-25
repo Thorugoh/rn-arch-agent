@@ -91,6 +91,7 @@ The todo example is the reference. `examples/todo/domain` is about 30 small file
 
 | Doc | Contents |
 |---|---|
+| [`packages/README.md`](packages/README.md) | The packages: what they are, why use them, what each one does, how they fit together |
 | [`docs/adding-to-an-app.md`](docs/adding-to-an-app.md) | Step-by-step guide: domain, CLI, React Native shell, remote mode |
 | [`docs/architecture-proposal.md`](docs/architecture-proposal.md) | The original proposal: principles, layers, agents as users, testing, trade-offs |
 | [`docs/poc-plan.md`](docs/poc-plan.md) | POC milestones and success criteria |
